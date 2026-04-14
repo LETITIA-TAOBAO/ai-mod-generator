@@ -1,55 +1,56 @@
-from .api_map import API_MAP
+import json
+from llm.qwen_client import call_qwen
 
-STEP_MAP = {
-    "entity": {
-        "creature": ["创建怪物Prefab"]
-    },
-    "trigger": {
-        "night": ["监听夜晚（TheWorld.state.isnight）"]
-    },
-    "behavior": {
-        "light": [
-            "添加光源组件（inst.entity:AddLight()）"
-        ],
-        "buff": [
-            "添加combat组件",
-            "提升攻击力（SetDamage）"
-        ]
-    }
-}
 
 def recommend(intent):
-    apis = []
-    steps = []
+    intent_text = {
+        "entity": intent.entity,
+        "triggers": intent.triggers,
+        "behaviors": intent.behaviors
+    }
 
-    # ===== API 推荐 =====
-    for trigger in intent.triggers:
-        if trigger in API_MAP:
-            apis.extend(API_MAP[trigger]["apis"])
+    prompt = f"""
+你是《饥荒 Don't Starve》高级Mod开发AI。
 
-    for behavior in intent.behaviors:
-        if behavior in API_MAP:
-            apis.extend(API_MAP[behavior]["apis"])
+请根据以下设计意图，生成完整开发方案：
 
-    apis = list(set(apis))
+【设计意图】
+{json.dumps(intent_text, ensure_ascii=False)}
 
-    # ===== 智能步骤生成 =====
+【必须输出JSON格式如下】：
 
-    # 实体
-    if intent.entity in STEP_MAP["entity"]:
-        steps.extend(STEP_MAP["entity"][intent.entity])
+{{
+  "apis": ["游戏API列表（如 SpawnPrefab, AddComponent）"],
+  "steps": ["详细开发步骤（必须可执行）"],
+  "code": "完整Lua代码（可以直接作为prefab使用）"
+}}
 
-    # 触发条件
-    for trigger in intent.triggers:
-        if trigger in STEP_MAP["trigger"]:
-            steps.extend(STEP_MAP["trigger"][trigger])
+【要求】
+- API必须真实存在于Don't Starve Mod API
+- steps必须是开发步骤，不要空话
+- code必须是完整Lua prefab文件
+- 不要解释，只输出JSON
+"""
 
-    # 行为
-    for behavior in intent.behaviors:
-        if behavior in STEP_MAP["behavior"]:
-            steps.extend(STEP_MAP["behavior"][behavior])
+    result = call_qwen([
+        {"role": "system", "content": "你是饥荒Mod专家"},
+        {"role": "user", "content": prompt}
+    ])
+
+    try:
+        return json.loads(result)
+    except:
+        start = result.find("{")
+        end = result.rfind("}") + 1
+
+        if start != -1 and end != -1:
+            try:
+                return json.loads(result[start:end])
+            except:
+                pass
 
     return {
-        "apis": apis,
-        "steps": steps
+        "apis": [],
+        "steps": [],
+        "code": "-- LLM生成失败"
     }
