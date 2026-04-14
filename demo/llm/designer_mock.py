@@ -1,4 +1,3 @@
-print("🔥 designer_mock 被加载")
 def design_with_llm(user_input):
     result = {
         "concept": "",
